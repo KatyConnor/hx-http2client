@@ -2,6 +2,8 @@ package hx.http2.client.config;
 
 import hx.http2.client.handler.HXHttpRequestRetryHandler;
 import org.apache.http.*;
+import org.apache.http.auth.AuthScope;
+import org.apache.http.client.HttpClient;
 import org.apache.http.client.config.CookieSpecs;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.config.Registry;
@@ -9,6 +11,7 @@ import org.apache.http.config.RegistryBuilder;
 import org.apache.http.config.SocketConfig;
 import org.apache.http.conn.ConnectTimeoutException;
 import org.apache.http.conn.ConnectionKeepAliveStrategy;
+import org.apache.http.conn.params.ConnRoutePNames;
 import org.apache.http.conn.routing.HttpRoute;
 import org.apache.http.conn.socket.ConnectionSocketFactory;
 import org.apache.http.conn.socket.LayeredConnectionSocketFactory;
@@ -19,6 +22,9 @@ import org.apache.http.conn.ssl.TrustSelfSignedStrategy;
 import org.apache.http.impl.client.*;
 import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
 import org.apache.http.message.BasicHeaderElementIterator;
+import org.apache.http.params.BasicHttpParams;
+import org.apache.http.params.CoreConnectionPNames;
+import org.apache.http.params.HttpParams;
 import org.apache.http.protocol.HTTP;
 import org.apache.http.protocol.HttpContext;
 import org.apache.http.ssl.SSLContextBuilder;
@@ -32,17 +38,26 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.context.annotation.PropertySource;
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestTemplate;
 
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLException;
 import javax.net.ssl.SSLHandshakeException;
+import javax.net.ssl.X509TrustManager;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.net.ConnectException;
 import java.net.URL;
 import java.net.UnknownHostException;
+import java.security.KeyManagementException;
+import java.security.KeyStore;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
+import java.security.cert.CertificateException;
+import java.security.cert.X509Certificate;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -58,8 +73,42 @@ import java.util.concurrent.TimeUnit;
 public class HttpClientPoolBeanConfig {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(HttpClientPoolBeanConfig.class);
-//    private final static String SYSTEM_PROPERTIES_MODE_NAME = "SYSTEM_PROPERTIES_MODE_OVERRIDE";
     private static final Set<Class<? extends IOException>> nonRetriableClasses = new HashSet<>();
+
+    // 安全认证文件  keystore.p12
+    private static final URL classPath = Thread.currentThread().getContextClassLoader().getResource("sample.jks");
+
+    /** 连接超时时间（默认3秒 3000ms） 单位毫秒（ms） */
+    private int connectionTimeout = 3000;
+
+    /** 读取数据超时时间（默认30秒 30000ms） 单位毫秒（ms） */
+    private int soTimeout = 30000;
+
+    /** 代理主机名 */
+    private String proxyHost;
+
+    /** 代理端口 */
+    private int proxyPort;
+
+    /** 代理主机用户名 */
+    private String proxyUser;
+
+    /** 代理主机密码 */
+    private String proxyPwd;
+
+    /** 代理主机域 */
+    private String proxyDomain;
+
+    /** 字符集设置，默认UTF-8 */
+    private String charset = "UTF-8";
+
+    private Header[] httpsCookieHeaders;
+
+    @Value("${keystorePath}")
+    private String keystorePath;
+
+    @Value("${keystorePassword}")
+    private String keystorePassword;
 
     //最大连接数
     @Value("${http.maxTotal}")
@@ -110,11 +159,13 @@ public class HttpClientPoolBeanConfig {
      */
     @Bean(name = "httpClientConnectionManager", destroyMethod = "close")
     public PoolingHttpClientConnectionManager initHttpPool(@Qualifier("socketConfig") SocketConfig socketConfig){
-        SSLContextBuilder sslContext = new SSLContextBuilder();
+        SSLContextBuilder sslContext = SSLContextBuilder.create().setKeyStoreType("PKCS12");
         PoolingHttpClientConnectionManager poolingHttpClientConnectionManager = null;
+
         try {
-            sslContext.loadTrustMaterial(null, new TrustSelfSignedStrategy());
-            LayeredConnectionSocketFactory sslsf = new SSLConnectionSocketFactory(sslContext.build(),
+            sslContext.loadTrustMaterial(new File(classPath.getPath()), keystorePassword.toCharArray(), new TrustSelfSignedStrategy());
+           // 设置参数请求信任，不做效验
+            LayeredConnectionSocketFactory sslsf = new SSLConnectionSocketFactory(sslContext.build(),new String[]{"SSLv2Hello", "SSLv3", "TLSv1", "TLSv1.2"}, null,
                     SSLConnectionSocketFactory.getDefaultHostnameVerifier());
 
             // 配置同时支持 HTTP 和 HTPPS
@@ -128,8 +179,8 @@ public class HttpClientPoolBeanConfig {
             poolingHttpClientConnectionManager.setDefaultMaxPerRoute(defaultMaxPerRoute); // 将每个路由基础的连接增加
 
             // 将目标主机的最大连接数添加
-            poolingHttpClientConnectionManager.setMaxPerRoute(new HttpRoute(new HttpHost("127.0.0.1",8080)), 30);
-            poolingHttpClientConnectionManager.setSocketConfig(new HttpHost("127.0.0.1",8080),socketConfig);
+//            poolingHttpClientConnectionManager.setMaxPerRoute(new HttpRoute(new HttpHost("127.0.0.1",8080)), 30);
+//            poolingHttpClientConnectionManager.setSocketConfig(new HttpHost("127.0.0.1",8080),socketConfig);
         } catch (Exception e) {
             LOGGER.error("init SSLContext error，exception:{}",e);
         }
@@ -245,5 +296,72 @@ public class HttpClientPoolBeanConfig {
                 .build();
         return socketConfig;
     }
+
+    /**
+     * 获取一个针对http的HttpClient
+     */
+//    private HttpClient getHttpClient() throws KeyManagementException, NoSuchAlgorithmException {
+//
+//        // 设置代理
+//        if (!StringUtils.isEmpty(proxyHost)) {
+//            HttpHost proxy = new HttpHost(proxyHost, proxyPort);
+//        }
+//        // 代理需要认证
+//        if (proxyUser != null) {
+//            if (proxyDomain != null) {// NTLM认证模式
+//                httpclient.getAuthSchemes().register("ntlm",
+//                        new NTLMSchemeFactory());
+//                httpclient.getCredentialsProvider().setCredentials(
+//                        AuthScope.ANY,
+//                        new NTCredentials(proxyUser, proxyPwd, proxyHost,
+//                                proxyDomain));
+//                List<String> authpref = new ArrayList<String>();
+//                authpref.add(AuthPolicy.NTLM);
+//                httpclient.getParams().setParameter(
+//                        AuthPNames.TARGET_AUTH_PREF, authpref);
+//            } else {// BASIC模式
+//                CredentialsProvider credsProvider = new BasicCredentialsProvider();
+//                credsProvider.setCredentials(
+//                        new AuthScope(proxyHost, proxyPort),
+//                        new UsernamePasswordCredentials(proxyUser, proxyPwd));
+//                httpclient.setCredentialsProvider(credsProvider);
+//            }
+//        }
+//        httpclient.addRequestInterceptor(new HttpRequestInterceptor() {
+//            public void process(final HttpRequest request,
+//                                final HttpContext context) throws HttpException,
+//                    IOException {
+//                if (!request.containsHeader("Accept")) {
+//                    request.addHeader("Accept", "*/*");
+//                }
+//                if (request.containsHeader("User-Agent")) {
+//                    request.removeHeaders("User-Agent");
+//                }
+//                if (request.containsHeader("Connection")) {
+//                    request.removeHeaders("Connection");
+//                }
+//                request.addHeader("User-Agent",
+//                        "Mozilla/5.0 (Windows NT 5.1; rv:8.0) Gecko/20100101 Firefox/8.0");
+//                request.addHeader("Connection", "keep-alive");
+//            }
+//        });
+//        return httpclient;
+//    }
+
+
+
+    private static X509TrustManager tm = new X509TrustManager() {
+        public void checkClientTrusted(X509Certificate[] xcs, String string)
+                throws CertificateException {
+        }
+
+        public void checkServerTrusted(X509Certificate[] xcs, String string)
+                throws CertificateException {
+        }
+
+        public X509Certificate[] getAcceptedIssuers() {
+            return null;
+        }
+    };
 
 }

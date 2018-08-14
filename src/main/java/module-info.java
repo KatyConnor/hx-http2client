@@ -14,9 +14,14 @@ module hx.http2client {
     requires fastjson;
     requires spring.webmvc;
     requires org.apache.commons.codec;
+    requires hamcrest.core;
 
     exports hx.http2.client.config;
     exports hx.http2.client.excutor;
     exports hx.http2.client.thread;
     exports hx.http2.client.handler;
+    exports hx.http2.client.enums;
+    exports hx.http2.client.exception;
+    exports hx.http2.client.response;
+    exports hx.http2.client.utils;
 }

@@ -1,19 +1,22 @@
 package hx.http2.client.excutor;
 
+import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
-import jdk.incubator.http.HttpClient;
-import jdk.incubator.http.HttpRequest;
-import jdk.incubator.http.HttpResponse;
+import hx.http2.client.config.HttpRequestConfig;
+import hx.http2.client.entity.HttpHeader;
+import hx.http2.client.enums.RequestMethodEnum;
+import hx.http2.client.exception.HttpConnectException;
+import hx.http2.client.response.BaseHttpResponse;
+import hx.http2.client.response.HttpResponse;
+import org.apache.http.Header;
 import org.apache.http.HttpEntity;
 import org.apache.http.NameValuePair;
-import org.apache.http.ParseException;
 import org.apache.http.client.ClientProtocolException;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
-import org.apache.http.client.methods.HttpRequestBase;
 import org.apache.http.client.utils.URIBuilder;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.CloseableHttpClient;
@@ -32,6 +35,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.charset.Charset;
 import java.util.*;
 
 /**
@@ -42,11 +46,7 @@ import java.util.*;
 public class HttpClientExcutor {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(HttpClientExcutor.class);
-
     private static final String UTF_8 = "UTF-8";
-    private static final int CONNECT_TIMEOUT = 10 * 1000;
-    private static final int SOCKET_TIMEOUT = 25 * 1000;
-    private static final int CONNECT_REQUEST_TIMEOUT = 5 * 1000;
 
     // 创建Httpclient对象
     @Autowired
@@ -56,235 +56,239 @@ public class HttpClientExcutor {
     @Autowired
     private RequestConfig requestConfig;
 
-    public void getHttpClient() throws URISyntaxException, IOException, InterruptedException {
-//        HttpRequest req = HttpRequest.create(new URI("http://www.infoq.com"))
-//                .body(noBody()).GET();
-//        CompletableFuture<HttpResponse> aResp = req.sendAsync();
-//        Thread.sleep(10);
-//        if (!aResp.isDone()) {
-//            aResp.cancel(true);
-//            System.out.println("Failed to reply quickly...");
-//            return;
-//        }
-//        HttpResponse response = aResp.get();
+    public HttpResponse<? extends BaseHttpResponse> excute(HttpRequestConfig httpRequestConfig,
+                                                           Class<? extends HttpResponse> classzz)
+            throws IOException, URISyntaxException {
 
-        HttpClient httpClient = HttpClient.newHttpClient();
-        HttpResponse httpResponse = httpClient.send(
-                HttpRequest.newBuilder(new URI("http://transport.opendata.ch/")).GET().build(),
-                HttpResponse.BodyHandler.asString()
-        );
-        int code = httpResponse.statusCode();
-        System.out.println(code);
-        System.out.println(httpResponse.body().toString());
+        switch (httpRequestConfig.getMethod()){
+            case GET:
+                return doGet(httpRequestConfig,classzz);
+            case POST:
+                return doPost(httpRequestConfig,classzz);
+            case PUT:
+                break;
+            case HEAD:
+                break;
+            case TRACE:
+                break;
+            case DELETE:
+                break;
+            case CONNECT:
+                break;
+            case OPTIONS:
+                break;
+            default:
+                throw new HttpConnectException(String.format("request method is not in method list,method :[s%], methodList:[s%]",
+                        httpRequestConfig.getMethod(),RequestMethodEnum.values()));
+        }
+        return null;
     }
 
-    public void postTest() throws URISyntaxException {
-//        URI uri = new URI("https://www.baidu.com/");
-//        HttpRequest.Builder post = HttpRequest.newBuilder(uri).POST(HttpRequest.BodyProcessor.fromString("###要请求的参数"));
-//        //post.setHeader可以设置UA、Cookie等参数
-//        post.setHeader("User-Agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 10_3 like Mac OS X) AppleWebKit/602.1.50 (KHTML, like Gecko) CriOS/56.0.2924.75 Mobile/14E5239e Safari/602.1");
-//
-//        HttpClient httpClient = HttpClient.newHttpClient();
-//        HttpResponse httpResponse = httpClient.send(post.build(), HttpResponse.BodyHandler.asString());
-//        int code = httpResponse.statusCode();
-//        System.out.println(code);
-//        System.out.println(uncompress(httpResponse.body().toString().getBytes()));
-    }
 
     /**
      * 执行Get请求
      *
-     * @param url
-     * @return 请求到的内容
-     * @throws URISyntaxException
-     * @throws IOException
-     * @throws ClientProtocolException
-     */
-    public String doGet(String url) throws URISyntaxException, ClientProtocolException, IOException {
-        return doGet(url, null);
-    }
-
-    /**
-     * 执行Get请求
-     *
-     * @param url
-     * @param params
+     * @param httpRequestConfig
      *            请求中的参数
      * @return 请求到的内容
      * @throws URISyntaxException
      * @throws IOException
      * @throws ClientProtocolException
      */
-    public String doGet(String url, Map<String, Object> params) throws URISyntaxException, ClientProtocolException, IOException {
-        // 定义请求的参数
-        URI uri = null;
-        if (params != null) {
-            URIBuilder builder = new URIBuilder(url);
-            params.forEach((k,v) ->{
-                // @TODO 如果是时间和其他类型的对象参数呢
-                builder.addParameter(k,String.valueOf(v));
-            });
-            uri = builder.build();
-        }
+    private HttpResponse<? extends BaseHttpResponse> doGet(HttpRequestConfig httpRequestConfig,
+                                                           Class<? extends HttpResponse> classzz)
+            throws URISyntaxException, ClientProtocolException, IOException {
 
+        LOGGER.info("do get request, requestConfig:{}",JSONObject.toJSONString(httpRequestConfig));
+        String url = getUrl(httpRequestConfig.getHostAddress(),httpRequestConfig.getUrl());
+        URI uri = setGetUrl(url,httpRequestConfig.getParams());
         // 创建http GET请求
-        HttpGet httpGet = null;
-        if (uri != null) {
-            httpGet = new HttpGet(uri);
-        } else {
-            httpGet = new HttpGet(url);
-        }
+        HttpGet httpGet =new HttpGet(uri);
         // 设置请求参数
-        httpGet.setConfig(this.requestConfig);
-
+        Map<String,String> headers = httpRequestConfig.getHeaders();
+        if (null != headers){
+            headers.forEach((k,v) ->{
+                httpGet.setHeader(k,v);
+            });
+        }else {
+            // 伪装浏览器请求
+            setHeader(httpGet,null,HttpHeader.build().setDfaultHeader());
+        }
+        // 配置请求的超时设置
+        RequestConfig requestConfig = httpRequestConfig.getRequestConfig();
+        httpGet.setConfig(null != requestConfig?requestConfig:this.requestConfig);
         // 请求的结果
+        HttpResponse httpResponse = execute(null,httpGet,classzz);
+        return httpResponse;
+    }
+
+    /**
+     * post 请求
+     * @param httpRequestConfig
+     * @param classzz
+     * @return
+     * @throws URISyntaxException
+     * @throws ClientProtocolException
+     * @throws IOException
+     */
+    private HttpResponse<? extends BaseHttpResponse> doPost(HttpRequestConfig httpRequestConfig,
+                                                           Class<? extends HttpResponse> classzz) throws URISyntaxException,
+            ClientProtocolException, IOException {
+        LOGGER.info("do post request, requestConfig:{}",JSONObject.toJSONString(httpRequestConfig));
+        // 创建http POST请求
+        String url = getUrl(httpRequestConfig.getHostAddress(),httpRequestConfig.getUrl());
+        HttpPost httpPost = new HttpPost(url);
+
+        // 设置请求头参数
+        Map<String,String> headers = httpRequestConfig.getHeaders();
+        if (null != headers){
+            headers.forEach((k,v) ->{
+                httpPost.setHeader(k,v);
+            });
+        }else {
+            // 伪装浏览器请求
+            setHeader(null,httpPost, HttpHeader.build().setDfaultHeader());
+        }
+
+        Map<String,Object> params = httpRequestConfig.getParams();
+        final List<NameValuePair> parameters;
+        final JSONObject paramsObject;
+        if (params != null) {
+            // 设置post参数
+            parameters = new ArrayList<>();
+            paramsObject = new JSONObject();
+            params.forEach((k,v) ->{
+                if (1==1){
+                    parameters.add(new BasicNameValuePair(k,String.valueOf(v)));
+                }else {
+                    paramsObject.put(k,String.valueOf(v));
+                }
+            });
+        }else {
+            parameters = null;
+            paramsObject = null;
+        }
+
+//        config(HttpRequestBase httpRequestBase)
+        // 构造一个form表单式的实体
+        if (null != parameters){
+            UrlEncodedFormEntity formEntity = new UrlEncodedFormEntity(parameters);
+            formEntity.setContentEncoding(new BasicHeader(HTTP.CONTENT_TYPE, "application/json; charset=utf-8"));
+            formEntity.setContentType("; charset=utf-8");
+            httpPost.setEntity(formEntity);
+        }
+
+        if (null != paramsObject){
+            // 构建一个json，body数据传递
+            StringEntity stringEntity = new StringEntity(paramsObject.toJSONString(), Charset.forName("UTF-8"));
+            stringEntity.setContentEncoding("UTF-8");
+            stringEntity.setContentType("application/json");
+            httpPost.setEntity(stringEntity);
+        }
+
+        // 配置请求的超时设置
+        RequestConfig requestConfig = httpRequestConfig.getRequestConfig();
+        httpPost.setConfig(null != requestConfig?requestConfig:this.requestConfig);
+        // 请求的结果
+        HttpResponse httpResponse = execute(httpPost,null,classzz);
+        return httpResponse;
+    }
+
+    private HttpResponse<? extends BaseHttpResponse> execute(HttpPost httpPost,HttpGet httpGet,
+                                                             Class<? extends HttpResponse> classzz) throws IOException {
         CloseableHttpResponse response = null;
+        HttpResponse httpResponse = null;
         try {
             // 执行请求
-            response = httpClient.execute(httpGet);
-            // 判断返回状态是否为200
-            if (response.getStatusLine().getStatusCode() == 200) {
-                // 获取服务端返回的数据,并返回
-                return EntityUtils.toString(response.getEntity(), UTF_8);
+            if (null != httpPost){
+                response = httpClient.execute(httpPost);
+                if (response.getStatusLine().getStatusCode() == 302){
+                    List<Header> headers = Arrays.asList(response.getAllHeaders());
+                    final String[] redirectUrl = {null};
+                    headers.forEach(v ->{
+                        if (v.getName().equals("Location")){
+                            redirectUrl[0] = v.getValue();
+                        }
+                    });
+                    if (null == redirectUrl[0] || redirectUrl[0].isEmpty()){
+                        throw new RuntimeException("redirectUrl can not null");
+                    }
+                    httpGet =new HttpGet(redirectUrl[0]);
+                    // 伪装浏览器请求
+                    setHeader(httpGet,null,setDefualHeader());
+                    httpGet.setHeader("Content-Type","text/html;charset=UTF-8");
+                    response = httpClient.execute(httpGet);
+                }
+            }else{
+                response = httpClient.execute(httpGet);
+                if (response.getStatusLine().getStatusCode() == 302){
+                    // 执行请求
+                    if (null != httpPost){
+                        response = httpClient.execute(httpPost);
+                    }else{
+                        response = httpClient.execute(httpGet);
+                    }
+
+                }
+            }
+
+
+            // 获取服务端返回的数据,并返回
+            System.out.println(JSONObject.toJSONString(response.getEntity()));
+            httpResponse = JSONObject.parseObject(EntityUtils.toString(response.getEntity(), UTF_8),classzz);
+            httpResponse.setStatusCode(response.getStatusLine().getStatusCode());
+            if (response.getStatusLine().getStatusCode() == 200){
+                httpResponse.successful();
+            }else {
+                httpResponse.setFailure();
             }
         } finally {
             if (response != null) {
                 response.close();
             }
         }
-        return null;
+        return httpResponse;
     }
 
-    /**
-     *
-     * @param url
-     * @param params
-     *            请求中的参数
-     * @return 请求到的内容
-     * @throws URISyntaxException
-     * @throws ClientProtocolException
-     * @throws IOException
-     */
-    public String doPost(String url, Map<String, Object> params) throws URISyntaxException,
-            ClientProtocolException, IOException {
-        // 设置post参数
-        List<NameValuePair> parameters = null;
-        // 构造一个form表单式的实体
-        UrlEncodedFormEntity formEntity = null;
-
-        // 定义请求的参数
-        if (params != null) {
-            // 设置post参数
-            parameters = new ArrayList<NameValuePair>();
-            for (Map.Entry<String, Object> entry : params.entrySet()) {
-                // 添加参数
-                parameters.add(new BasicNameValuePair(entry.getKey(), String
-                        .valueOf(entry.getValue())));
+    private void setHeader(HttpGet httpGet,HttpPost httpPost,Map<String,String> headerMap){
+        if (headerMap != null && headerMap.size() > 0){
+            if (null != httpGet){
+                headerMap.forEach((k,v) ->{
+                    httpGet.setHeader(k,v);
+                });
             }
-            // 构造一个form表单式的实体
-            formEntity = new UrlEncodedFormEntity(parameters);
-        }
 
-        // 创建http POST请求
-        HttpPost httpPost = null;
-        if (formEntity != null) {
-            httpPost = new HttpPost(url);
-            // 将请求实体设置到httpPost对象中
-            httpPost.setEntity(formEntity);
-            // 伪装浏览器请求
-            setHeader(httpPost,setDefualHeader());
-        } else {
-            httpPost = new HttpPost(url);
-            // 伪装浏览器请求
-            setHeader(httpPost,setDefualHeader());
+            if (null != httpPost){
+                headerMap.forEach((k,v) ->{
+                    httpPost.setHeader(k,v);
+                });
+            }
         }
-        // 设置请求参数
-        httpPost.setConfig(this.requestConfig);
-
-        // 请求的结果
-        CloseableHttpResponse response = execute(httpPost,null);
-        return null;
     }
 
-
-    /**
-     *
-     * @param url
-     * @param params
-     *            请求中的参数
-     * @return 请求到的内容
-     * @throws URISyntaxException
-     * @throws ClientProtocolException
-     * @throws IOException
-     */
-    public CloseableHttpResponse doPostBody(String url, String params) throws Exception {
-        // 创建http POST请求
-        HttpPost httpPost = null;
+    private URI setGetUrl(String url, Map<String, Object> params) throws URISyntaxException {
+        URIBuilder builder = new URIBuilder(url);
         if (params != null) {
-            // 设置post参数
-            StringEntity s = new StringEntity(params, "utf-8");
-            HttpEntity entity = new StringEntity(params);
-            httpPost = new HttpPost(url);
-            // 将请求实体设置到httpPost对象中
-            httpPost.setEntity(entity);
-            // 伪装浏览器请求
-            setHeader(httpPost,setDefualHeader());
-        } else {
-            httpPost = new HttpPost(url);
-            // 伪装浏览器请求
-            setHeader(httpPost,setDefualHeader());
+            params.forEach((k,v) ->{
+                // @TODO 如果是时间和其他类型的对象参数需要进行修改
+                builder.addParameter(k,String.valueOf(v));
+            });
+            return builder.build();
         }
-        // 设置请求参数
-        httpPost.setConfig(this.requestConfig);
-
-        // 请求的结果
-        CloseableHttpResponse response = execute(httpPost,null);
-        return response;
+        return builder.build();
     }
 
-
-    /**
-     *
-     * @param url
-     *            请求中的参数
-     * @return 请求到的内容
-     * @throws URISyntaxException
-     * @throws ClientProtocolException
-     * @throws IOException
-     */
-    public String doPost(String url) throws URISyntaxException, ClientProtocolException, IOException {
-        return doPost(url, null);
-    }
-
-
-    /**
-     * 处理json格式的body post请求
-     *
-     * @return
-     * @throws Exception
-     * @throws ClientProtocolException
-     */
-    public String processPostJson(String postUrl, JSONObject jsonObj) throws ClientProtocolException, IOException {
-        HttpPost post = new HttpPost(postUrl);
-        post.setHeader("Content-Type", "application/json");
-        post.addHeader("Authorization", "Basic YWRtaW46");
-        String str = null;
-        StringEntity s = new StringEntity(jsonObj.toJSONString(), "utf-8");
-        s.setContentEncoding(new BasicHeader(HTTP.CONTENT_TYPE, "application/json"));
-
-        RequestConfig requestConfig = RequestConfig.custom().setSocketTimeout(25000).setConnectTimeout(3000).build();
-
-        post.setEntity(s);
-        post.setConfig(requestConfig);
-
-        CloseableHttpResponse response = execute(post,null);
-        HttpEntity entity = response.getEntity();
-        if (entity != null) {
-            InputStream instreams = entity.getContent();
-            str = convertStreamToString(instreams);
-            post.abort();
+    private String getUrl(String hostAddress,String requestUrl){
+        if (null == hostAddress || hostAddress.isEmpty()){
+            throw new HttpConnectException(String.format("request HostAddress can not be null! HostAddress:s%",hostAddress));
         }
-        return str;
+
+        if (null == requestUrl || requestUrl.isEmpty()){
+            throw new HttpConnectException(String.format("request url can not be null! url:s%",requestUrl));
+        }
+
+        return new StringBuffer().append(hostAddress.endsWith("/")?hostAddress:hostAddress+"/").
+                append(requestUrl.startsWith("/")?requestUrl.substring(1):requestUrl).toString();
     }
 
     private static String convertStreamToString(InputStream is) {
@@ -307,126 +311,4 @@ public class HttpClientExcutor {
         return sb.toString();
     }
 
-
-    private CloseableHttpResponse execute(HttpPost httpPost,HttpGet httpGet) throws IOException {
-        CloseableHttpResponse response = null;
-        try {
-            // 执行请求
-//            httpClient = getHttpClient();
-            response = httpClient.execute(httpPost);
-//            InputStream in=response.getEntity().getContent();
-//            String json = IOUtils.;
-//            in.close();
-            // 判断返回状态是否为200
-            if (response.getStatusLine().getStatusCode() == 200) {
-                // 获取服务端返回的数据,并返回
-                return response;
-            }
-        } finally {
-            if (response != null) {
-                response.close();
-            }
-        }
-        return null;
-    }
-
-    private void setHeader(HttpPost httpPost,Map<String,String> headerMap){
-       if (headerMap != null && headerMap.size() > 0){
-           for (Map.Entry entry : headerMap.entrySet()){
-               httpPost.setHeader((String) entry.getKey(),(String) entry.getValue());
-           }
-       }
-    }
-
-    private Map<String,String> setDefualHeader(){
-        Map<String,String> headerMap = new HashMap<>();
-        headerMap.put("User-Agent",
-                "Mozilla/5.0 (Windows NT 6.3; Win64; x64) AppleWebKit/537.36 " +
-                        "(KHTML, like Gecko) Chrome/41.0.2272.118 Safari/537.36");
-        headerMap.put("Content-Type", "application/json");
-        return headerMap;
-    }
-
-//    private CloseableHttpClient getHttpClient(){
-//        return httpConnectionPoolManage.getHttpClient();
-//    }
-
-    public  String processHttpRequest(String url, String requestMethod, Map<String, String> paramsMap) {
-        List<BasicNameValuePair> formparams = new ArrayList<BasicNameValuePair>();
-        if ("post".equals(requestMethod)) {
-            HttpPost httppost = new HttpPost(url);
-            httppost.setHeader("Content-Type", "application/json");
-            for (Iterator<String> it = paramsMap.keySet().iterator(); it.hasNext();) {
-                String key = it.next();
-                String value = paramsMap.get(key);
-                formparams.add(new BasicNameValuePair(key, value));
-            }
-            return doRequest(httppost, null, formparams);
-        } else if ("get".equals(requestMethod)) {
-            HttpGet httppost = new HttpGet(url);
-            for (Iterator<String> it = paramsMap.keySet().iterator(); it.hasNext();) {
-                String key = it.next();
-                String value = paramsMap.get(key);
-                formparams.add(new BasicNameValuePair(key, value));
-            }
-            return doRequest(null, httppost, formparams);
-        }
-        return "";
-    }
-
-    private String doRequest(HttpPost httpPost, HttpGet httpGet, List<BasicNameValuePair> formparams) {
-
-        try {
-            CloseableHttpResponse response = null;
-            UrlEncodedFormEntity uefEntity = new UrlEncodedFormEntity(formparams);
-            // 设置请求和传输超时时间
-            RequestConfig requestConfig = RequestConfig.custom().setSocketTimeout(SOCKET_TIMEOUT).
-                    setConnectTimeout(CONNECT_TIMEOUT)
-                    .build();
-            if (null != httpPost) {
-                uefEntity.setContentEncoding(new BasicHeader(HTTP.CONTENT_TYPE, "application/json"));
-                httpPost.setEntity(uefEntity);
-                httpPost.setConfig(requestConfig);
-                response = execute(httpPost,null);
-            } else {
-                httpGet.setConfig(requestConfig);
-                response = execute(null,httpGet);
-            }
-            HttpEntity entity = response.getEntity();
-            String str = EntityUtils.toString(entity, "UTF-8");
-            if (null == str || "".equals(str)) {
-                return "";
-            } else {
-                return str;
-            }
-        } catch (ParseException e) {
-            e.printStackTrace();
-        } catch (IOException e) {
-            e.printStackTrace();
-        } finally {
-        }
-        return "";
-    }
-
-    /**
-     *
-     * @param httpRequestBase
-     */
-    private static void config(HttpRequestBase httpRequestBase) {
-        // 设置Header等
-        // httpRequestBase.setHeader("User-Agent", "Mozilla/5.0");
-        // httpRequestBase
-        // .setHeader("Accept",
-        // "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
-        // httpRequestBase.setHeader("Accept-Language",
-        // "zh-CN,zh;q=0.8,en-US;q=0.5,en;q=0.3");// "en-US,en;q=0.5");
-        // httpRequestBase.setHeader("Accept-Charset",
-        // "ISO-8859-1,utf-8,gbk,gb2312;q=0.7,*;q=0.7");
-
-        // 配置请求的超时设置
-        RequestConfig requestConfig = RequestConfig.custom()
-                .setConnectionRequestTimeout(CONNECT_REQUEST_TIMEOUT)
-                .setConnectTimeout(CONNECT_TIMEOUT).setSocketTimeout(SOCKET_TIMEOUT).build();
-        httpRequestBase.setConfig(requestConfig);
-    }
 }

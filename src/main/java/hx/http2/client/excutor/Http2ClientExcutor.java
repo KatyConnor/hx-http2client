@@ -5,8 +5,11 @@ import jdk.incubator.http.HttpClient;
 import jdk.incubator.http.HttpRequest;
 import jdk.incubator.http.HttpResponse;
 import org.apache.http.client.config.RequestConfig;
+import org.apache.http.conn.ssl.NoopHostnameVerifier;
 import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
 import org.apache.http.conn.ssl.TrustSelfSignedStrategy;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
 import org.apache.http.ssl.SSLContextBuilder;
 import org.apache.http.ssl.SSLContexts;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,7 +29,7 @@ import java.util.Map;
  * @Author mingliang
  * @Date 2018-08-01 17:27
  */
-@Component
+//@Component
 public class Http2ClientExcutor {
 
     private static final String QUESTION_MARK = "?";
@@ -109,30 +112,30 @@ public class Http2ClientExcutor {
      *  获取安全的加密（Https）的HttpClient
      * @return
      */
-    public static HttpClient getTLSHttpClient(){
-        SSLContext sslcontext = null;
-        // Trust own CA and all self-signed certs
-        try {
+//    public static HttpClient getTLSHttpClient(){
+//        SSLContext sslcontext = null;
+//        // Trust own CA and all self-signed certs
+//        try {
+//
+//            sslcontext = SSLContexts.custom()
+//                    .loadTrustMaterial(new File("keystore.p12"), "root,.159357".toCharArray(), new TrustSelfSignedStrategy())
+//                    .build();
+//        } catch (Exception e) {
+//            e.printStackTrace();
+//        }
+//
+//        // Allow TLSv1 protocol only
+//        SSLConnectionSocketFactory sslsf = new SSLConnectionSocketFactory(
+//                sslcontext, new String[] { "TLSv1" }, null,
+//                NoopHostnameVerifier.INSTANCE);
+//
+//        CloseableHttpClient httpclient = HttpClients.custom().setSSLSocketFactory(sslsf).build();
+//        return httpclient;
+//    }
 
-            sslcontext = SSLContexts.custom()
-                    .loadTrustMaterial(new File("keystore.p12"), "root,.159357".toCharArray(), new TrustSelfSignedStrategy())
-                    .build();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-
-        // Allow TLSv1 protocol only
-        SSLConnectionSocketFactory sslsf = new SSLConnectionSocketFactory(
-                sslcontext, new String[] { "TLSv1" }, null,
-                NoopHostnameVerifier.INSTANCE);
-
-        CloseableHttpClient httpclient = HttpClients.custom().setSSLSocketFactory(sslsf).build();
-        return httpclient;
-    }
-
-    private static HttpClient getHttpClient(){
-        return HttpClient.newHttpClient();
-    }
+//    private static HttpClient getHttpClient(){
+//        return HttpClient.newHttpClient();
+//    }
 
     private HttpClient.Builder getBuilder(){
         return HttpClient.newBuilder();
@@ -187,6 +190,40 @@ public class Http2ClientExcutor {
     }
 
 
+    public void getHttpClient() throws URISyntaxException, IOException, InterruptedException {
+//        HttpRequest req = HttpRequest.create(new URI("http://www.infoq.com"))
+//                .body(noBody()).GET();
+//        CompletableFuture<HttpResponse> aResp = req.sendAsync();
+//        Thread.sleep(10);
+//        if (!aResp.isDone()) {
+//            aResp.cancel(true);
+//            System.out.println("Failed to reply quickly...");
+//            return;
+//        }
+//        HttpResponse response = aResp.get();
+
+        HttpClient httpClient = HttpClient.newHttpClient();
+        HttpResponse httpResponse = httpClient.send(
+                HttpRequest.newBuilder(new URI("http://transport.opendata.ch/")).GET().build(),
+                HttpResponse.BodyHandler.asString()
+        );
+        int code = httpResponse.statusCode();
+        System.out.println(code);
+        System.out.println(httpResponse.body().toString());
+    }
+
+    public void postTest() throws URISyntaxException {
+//        URI uri = new URI("https://www.baidu.com/");
+//        HttpRequest.Builder post = HttpRequest.newBuilder(uri).POST(HttpRequest.BodyProcessor.fromString("###要请求的参数"));
+//        //post.setHeader可以设置UA、Cookie等参数
+//        post.setHeader("User-Agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 10_3 like Mac OS X) AppleWebKit/602.1.50 (KHTML, like Gecko) CriOS/56.0.2924.75 Mobile/14E5239e Safari/602.1");
+//
+//        HttpClient httpClient = HttpClient.newHttpClient();
+//        HttpResponse httpResponse = httpClient.send(post.build(), HttpResponse.BodyHandler.asString());
+//        int code = httpResponse.statusCode();
+//        System.out.println(code);
+//        System.out.println(uncompress(httpResponse.body().toString().getBytes()));
+    }
 
 
 }
