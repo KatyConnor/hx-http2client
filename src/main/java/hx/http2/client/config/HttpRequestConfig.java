@@ -1,5 +1,7 @@
 package hx.http2.client.config;
 
+import hx.http2.client.entity.ContentType;
+import hx.http2.client.entity.HttpHeader;
 import hx.http2.client.enums.RequestMethodEnum;
 import hx.http2.client.utils.BeanMapUtil;
 import org.apache.http.client.config.RequestConfig;
@@ -21,10 +23,13 @@ public class HttpRequestConfig implements Serializable {
     private RequestMethodEnum method;
     private String hostAddress;
     private String url;
-    private Map<String,String> headers;
+    private HttpHeader headers;
     private Map<String,Object> params;
     private Object param;
+    private String paramstr;
     private RequestConfig requestConfig;
+    private boolean body;
+    private ContentType contentType;
 
     private HttpRequestConfig(){
 
@@ -61,11 +66,11 @@ public class HttpRequestConfig implements Serializable {
         return this;
     }
 
-    public Map<String, String> getHeaders() {
+    public HttpHeader getHeaders() {
         return headers;
     }
 
-    public HttpRequestConfig setHeaders(Map<String, String> headers) {
+    public HttpRequestConfig setHeaders(HttpHeader headers) {
         this.headers = headers;
         return this;
     }
@@ -100,6 +105,15 @@ public class HttpRequestConfig implements Serializable {
         return this;
     }
 
+    public String getParamstr() {
+        return paramstr;
+    }
+
+    public HttpRequestConfig setParamstr(String paramstr) {
+        this.paramstr = paramstr;
+        return this;
+    }
+
     public RequestConfig getRequestConfig() {
         return requestConfig;
     }
@@ -107,5 +121,24 @@ public class HttpRequestConfig implements Serializable {
     public HttpRequestConfig setRequestConfig(RequestConfig requestConfig) {
         this.requestConfig = requestConfig;
         return this;
+    }
+
+    public boolean isBody() {
+        return body;
+    }
+
+    public HttpRequestConfig setBody(boolean body) {
+        this.body = body;
+        return this;
+    }
+
+    public ContentType getContentType() {
+        return contentType;
+    }
+
+    public HttpRequestConfig setContentType(ContentType contentType) {
+        this.contentType = contentType;
+        return this;
+
     }
 }

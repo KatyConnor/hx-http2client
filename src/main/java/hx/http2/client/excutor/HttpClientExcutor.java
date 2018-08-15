@@ -1,15 +1,11 @@
 package hx.http2.client.excutor;
 
-import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
 import hx.http2.client.config.HttpRequestConfig;
 import hx.http2.client.entity.HttpHeader;
 import hx.http2.client.enums.RequestMethodEnum;
 import hx.http2.client.exception.HttpConnectException;
-import hx.http2.client.response.BaseHttpResponse;
 import hx.http2.client.response.HttpResponse;
-import org.apache.http.Header;
-import org.apache.http.HttpEntity;
 import org.apache.http.NameValuePair;
 import org.apache.http.client.ClientProtocolException;
 import org.apache.http.client.config.RequestConfig;
@@ -20,9 +16,7 @@ import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.utils.URIBuilder;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.message.BasicHeader;
 import org.apache.http.message.BasicNameValuePair;
-import org.apache.http.protocol.HTTP;
 import org.apache.http.util.EntityUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -105,7 +99,7 @@ public class HttpClientExcutor {
         // 创建http GET请求
         HttpGet httpGet =new HttpGet(uri);
         // 设置请求参数
-        Map<String,String> headers = httpRequestConfig.getHeaders();
+        Map<String,String> headers = httpRequestConfig.getHeaders().getHeaders();
         if (null != headers){
             headers.forEach((k,v) ->{
                 httpGet.setHeader(k,v);
@@ -119,6 +113,7 @@ public class HttpClientExcutor {
         httpGet.setConfig(null != requestConfig?requestConfig:this.requestConfig);
         // 请求的结果
         HttpResponse httpResponse = execute(null,httpGet,classzz);
+        LOGGER.info("request service end, response:{}",JSONObject.toJSONString(httpResponse));
         return httpResponse;
     }
 
@@ -140,7 +135,7 @@ public class HttpClientExcutor {
         HttpPost httpPost = new HttpPost(url);
 
         // 设置请求头参数
-        Map<String,String> headers = httpRequestConfig.getHeaders();
+        Map<String,String> headers = httpRequestConfig.getHeaders().getHeaders();
         if (null != headers){
             headers.forEach((k,v) ->{
                 httpPost.setHeader(k,v);
@@ -158,32 +153,24 @@ public class HttpClientExcutor {
             parameters = new ArrayList<>();
             paramsObject = new JSONObject();
             params.forEach((k,v) ->{
-                if (1==1){
+                if (httpRequestConfig.isBody() && ){
                     parameters.add(new BasicNameValuePair(k,String.valueOf(v)));
                 }else {
                     paramsObject.put(k,String.valueOf(v));
                 }
             });
-        }else {
-            parameters = null;
-            paramsObject = null;
-        }
 
-//        config(HttpRequestBase httpRequestBase)
-        // 构造一个form表单式的实体
-        if (null != parameters){
-            UrlEncodedFormEntity formEntity = new UrlEncodedFormEntity(parameters);
-            formEntity.setContentEncoding(new BasicHeader(HTTP.CONTENT_TYPE, "application/json; charset=utf-8"));
-            formEntity.setContentType("; charset=utf-8");
-            httpPost.setEntity(formEntity);
-        }
+            // 构造一个form表单式的实体
+            if (null != parameters){
+                UrlEncodedFormEntity formEntity = new UrlEncodedFormEntity(parameters);
+                httpPost.setEntity(formEntity);
+            }
+            if (null != paramsObject){
+                // 构建一个json，body数据传递
+                StringEntity stringEntity = new StringEntity(paramsObject.toJSONString(), Charset.forName("UTF-8"));
+                httpPost.setEntity(stringEntity);
+            }
 
-        if (null != paramsObject){
-            // 构建一个json，body数据传递
-            StringEntity stringEntity = new StringEntity(paramsObject.toJSONString(), Charset.forName("UTF-8"));
-            stringEntity.setContentEncoding("UTF-8");
-            stringEntity.setContentType("application/json");
-            httpPost.setEntity(stringEntity);
         }
 
         // 配置请求的超时设置
@@ -202,36 +189,9 @@ public class HttpClientExcutor {
             // 执行请求
             if (null != httpPost){
                 response = httpClient.execute(httpPost);
-                if (response.getStatusLine().getStatusCode() == 302){
-                    List<Header> headers = Arrays.asList(response.getAllHeaders());
-                    final String[] redirectUrl = {null};
-                    headers.forEach(v ->{
-                        if (v.getName().equals("Location")){
-                            redirectUrl[0] = v.getValue();
-                        }
-                    });
-                    if (null == redirectUrl[0] || redirectUrl[0].isEmpty()){
-                        throw new RuntimeException("redirectUrl can not null");
-                    }
-                    httpGet =new HttpGet(redirectUrl[0]);
-                    // 伪装浏览器请求
-                    setHeader(httpGet,null,setDefualHeader());
-                    httpGet.setHeader("Content-Type","text/html;charset=UTF-8");
-                    response = httpClient.execute(httpGet);
-                }
             }else{
                 response = httpClient.execute(httpGet);
-                if (response.getStatusLine().getStatusCode() == 302){
-                    // 执行请求
-                    if (null != httpPost){
-                        response = httpClient.execute(httpPost);
-                    }else{
-                        response = httpClient.execute(httpGet);
-                    }
-
-                }
             }
-
 
             // 获取服务端返回的数据,并返回
             System.out.println(JSONObject.toJSONString(response.getEntity()));

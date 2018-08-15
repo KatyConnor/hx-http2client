@@ -6,6 +6,8 @@ public class HttpHeader {
 
     private Map<String,String> headers;
 
+    private HttpHeader(){};
+
     public static HttpHeader build(){
         return new HttpHeader();
     }
@@ -59,5 +61,13 @@ public class HttpHeader {
         headers.put("Accept-Language", "zh-CN,zh;q=0.8,en-US;q=0.5,en;q=0.3");
         headers.put("Accept-Charset", "utf-8,ISO-8859-1,gbk,gb2312; q=0.7,*;q=0.7");
         return headers;
+    }
+
+    public Map<String, String> getHeaders() {
+        return headers;
+    }
+
+    public void setHeaders(Map<String, String> headers) {
+        this.headers = headers;
     }
 }

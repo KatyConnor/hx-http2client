@@ -6,68 +6,23 @@ import java.io.Serializable;
  * @Author mingliang
  * @Date 2018-08-06 17:12
  */
-public class HttpResponse<E extends BaseHttpResponse> implements Serializable {
+public class HttpResponse implements Serializable {
 
+    /** 状态码 */
     private String code;
-    private int statusCode;
-    private String error;
+    /** 业务状态码 */
+    private String statusCode;
+    /** 错误码 */
+    private String errorCode;
+    /** 错误描述 */
+    private String errorMessage;
+    /** 返回数据 */
     private String data;
-    private E dataEntity;
+    /** 返回描述 */
     private String msg;
+    /** 授权token */
+    private String authorizedToken;
 
-    public String getCode() {
-        return code;
-    }
 
-    public void setCode(String code) {
-        this.code = code;
-    }
-
-    public int getStatusCode() {
-        return statusCode;
-    }
-
-    public void setStatusCode(int statusCode) {
-        this.statusCode = statusCode;
-    }
-
-    public String getError() {
-        return error;
-    }
-
-    public void setError(String error) {
-        this.error = error;
-    }
-
-    public String getData() {
-        return data;
-    }
-
-    public void setData(String data) {
-        this.data = data;
-    }
-
-    public E getDataEntity() {
-        return dataEntity;
-    }
-
-    public void setDataEntity(E dataEntity) {
-        this.dataEntity = dataEntity;
-    }
-
-    public String getMsg() {
-        return msg;
-    }
-
-    public void setMsg(String msg) {
-        this.msg = msg;
-    }
-
-    public void setFailure(){
-
-    }
-    public void successful(){
-
-    }
 
 }

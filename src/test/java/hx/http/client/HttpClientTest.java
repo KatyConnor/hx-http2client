@@ -5,7 +5,6 @@ import hx.http2.client.SpringbootApplications;
 import hx.http2.client.config.HttpRequestConfig;
 import hx.http2.client.enums.RequestMethodEnum;
 import hx.http2.client.excutor.HttpClientExcutor;
-import hx.http2.client.response.BaseHttpResponse;
 import hx.http2.client.response.HttpResponse;
 import org.junit.Test;
 import org.junit.runner.RunWith;
