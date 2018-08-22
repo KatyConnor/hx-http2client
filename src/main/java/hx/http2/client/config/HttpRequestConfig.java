@@ -1,5 +1,6 @@
 package hx.http2.client.config;
 
+import com.alibaba.fastjson.JSONObject;
 import hx.http2.client.entity.ContentType;
 import hx.http2.client.entity.HttpHeader;
 import hx.http2.client.enums.RequestMethodEnum;
@@ -13,6 +14,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
+ *
  * @Author mingliang
  * @Date 2018-08-06 17:43
  */
@@ -25,18 +27,105 @@ public class HttpRequestConfig implements Serializable {
     private String url;
     private HttpHeader headers;
     private Map<String,Object> params;
-    private Object param;
-    private String paramstr;
+    private Map<String,Object> requestParam;
     private RequestConfig requestConfig;
-    private boolean body;
+    private boolean form;
     private ContentType contentType;
 
-    private HttpRequestConfig(){
-
-    }
+    private HttpRequestConfig(){}
 
     public static HttpRequestConfig build(){
         return new HttpRequestConfig();
+    }
+
+    public HttpRequestConfig bodyStr(Map<String,String> paramMap){
+        checkMap(this.params);
+        this.params.putAll(paramMap);
+        return this;
+    }
+
+    public HttpRequestConfig body(Map<String,Object> paramMap){
+        checkMap(this.params);
+        this.params.putAll(paramMap);
+        return this;
+    }
+
+    public HttpRequestConfig body(Object param){
+        checkMap(this.params);
+        if (param instanceof JSONObject){
+            this.params.putAll((JSONObject)param);
+            return this;
+        }
+
+        try {
+            this.params.putAll(BeanMapUtil.beanToMap(param));
+        } catch (IllegalAccessException e) {
+            LOGGER.error("cast bean to map,exception:{}",e);
+        }
+        return this;
+    }
+
+    public HttpRequestConfig body(String jsonParam){
+        JSONObject object = null;
+        try{
+            object = JSONObject.parseObject(jsonParam);
+        }catch (Exception e){
+            LOGGER.error("param string is not json string, jsonParam:{}",jsonParam);
+        }
+        checkMap(this.params);
+        this.params.putAll(object);
+        return this;
+    }
+
+    public HttpRequestConfig body(String key,Object value){
+        checkMap(this.params);
+        this.params.put(key,value);
+        return this;
+    }
+
+    public HttpRequestConfig requestParamStr(Map<String,String> paramMap){
+        checkMap(this.requestParam);
+        this.requestParam.putAll(paramMap);
+        return this;
+    }
+
+    public HttpRequestConfig requestParam(Map<String,Object> paramMap){
+        checkMap(this.requestParam);
+        this.requestParam.putAll(paramMap);
+        return this;
+    }
+
+    public HttpRequestConfig requestParam(Object param){
+        checkMap(this.requestParam);
+        if (param instanceof JSONObject){
+            this.requestParam.putAll((JSONObject)param);
+            return this;
+        }
+
+        try {
+            this.requestParam.putAll(BeanMapUtil.beanToMap(param));
+        } catch (IllegalAccessException e) {
+            LOGGER.error("cast bean to map,exception:{}",e);
+        }
+        return this;
+    }
+
+    public HttpRequestConfig requestParam(String jsonParam){
+        JSONObject object = null;
+        try{
+            object = JSONObject.parseObject(jsonParam);
+        }catch (Exception e){
+            LOGGER.error("param string is not json string, jsonParam:{}",jsonParam);
+        }
+        checkMap(this.requestParam);
+        this.requestParam.putAll(object);
+        return this;
+    }
+
+    public HttpRequestConfig requestParam(String key,String value){
+        checkMap(this.requestParam);
+        this.requestParam.put(key,value);
+        return this;
     }
 
     public RequestMethodEnum getMethod() {
@@ -79,56 +168,12 @@ public class HttpRequestConfig implements Serializable {
         return params;
     }
 
-    public HttpRequestConfig setParams(Map<String, Object> params) {
-        if (null == this.params){
-            this.params = params;
-        }else {
-            this.params.putAll(params);
-        }
-        return this;
-    }
-
-    public Object getParam() {
-        return param;
-    }
-
-    public HttpRequestConfig setParam(Object param) {
-        if (null == this.params){
-            this.params = new HashMap<>();
-        }
-        try {
-            this.params.putAll(BeanMapUtil.beanToMap(param));
-        } catch (IllegalAccessException e) {
-            LOGGER.error("cast bean to map,exception:{}",e);
-        }
-        this.param = param;
-        return this;
-    }
-
-    public String getParamstr() {
-        return paramstr;
-    }
-
-    public HttpRequestConfig setParamstr(String paramstr) {
-        this.paramstr = paramstr;
-        return this;
-    }
-
     public RequestConfig getRequestConfig() {
         return requestConfig;
     }
 
     public HttpRequestConfig setRequestConfig(RequestConfig requestConfig) {
         this.requestConfig = requestConfig;
-        return this;
-    }
-
-    public boolean isBody() {
-        return body;
-    }
-
-    public HttpRequestConfig setBody(boolean body) {
-        this.body = body;
         return this;
     }
 
@@ -140,5 +185,23 @@ public class HttpRequestConfig implements Serializable {
         this.contentType = contentType;
         return this;
 
+    }
+
+    public boolean isForm() {
+        return form;
+    }
+
+    public void setForm(boolean form) {
+        this.form = form;
+    }
+
+    public Map<String, Object> getRequestParam() {
+        return requestParam;
+    }
+
+    private void checkMap(Map<String,Object> map){
+        if (null == map){
+            map = new HashMap<>();
+        }
     }
 }

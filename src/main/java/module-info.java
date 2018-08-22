@@ -15,6 +15,8 @@ module hx.http2client {
     requires spring.webmvc;
     requires org.apache.commons.codec;
     requires hamcrest.core;
+    requires core;
+//    requires javase;
 
     exports hx.http2.client.config;
     exports hx.http2.client.excutor;

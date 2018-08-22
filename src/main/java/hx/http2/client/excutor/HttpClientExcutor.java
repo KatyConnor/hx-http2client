@@ -3,6 +3,7 @@ package hx.http2.client.excutor;
 import com.alibaba.fastjson.JSONObject;
 import hx.http2.client.config.HttpRequestConfig;
 import hx.http2.client.entity.HttpHeader;
+import hx.http2.client.enums.HttpStatus;
 import hx.http2.client.enums.RequestMethodEnum;
 import hx.http2.client.exception.HttpConnectException;
 import hx.http2.client.response.HttpResponse;
@@ -50,7 +51,7 @@ public class HttpClientExcutor {
     @Autowired
     private RequestConfig requestConfig;
 
-    public HttpResponse<? extends BaseHttpResponse> excute(HttpRequestConfig httpRequestConfig,
+    public HttpResponse excute(HttpRequestConfig httpRequestConfig,
                                                            Class<? extends HttpResponse> classzz)
             throws IOException, URISyntaxException {
 
@@ -89,8 +90,8 @@ public class HttpClientExcutor {
      * @throws IOException
      * @throws ClientProtocolException
      */
-    private HttpResponse<? extends BaseHttpResponse> doGet(HttpRequestConfig httpRequestConfig,
-                                                           Class<? extends HttpResponse> classzz)
+    private <T> HttpResponse<T> doGet(HttpRequestConfig httpRequestConfig,
+                                                           Class<T> classzz)
             throws URISyntaxException, ClientProtocolException, IOException {
 
         LOGGER.info("do get request, requestConfig:{}",JSONObject.toJSONString(httpRequestConfig));
@@ -126,7 +127,7 @@ public class HttpClientExcutor {
      * @throws ClientProtocolException
      * @throws IOException
      */
-    private HttpResponse<? extends BaseHttpResponse> doPost(HttpRequestConfig httpRequestConfig,
+    private HttpResponse doPost(HttpRequestConfig httpRequestConfig,
                                                            Class<? extends HttpResponse> classzz) throws URISyntaxException,
             ClientProtocolException, IOException {
         LOGGER.info("do post request, requestConfig:{}",JSONObject.toJSONString(httpRequestConfig));
@@ -136,14 +137,8 @@ public class HttpClientExcutor {
 
         // 设置请求头参数
         Map<String,String> headers = httpRequestConfig.getHeaders().getHeaders();
-        if (null != headers){
-            headers.forEach((k,v) ->{
-                httpPost.setHeader(k,v);
-            });
-        }else {
-            // 伪装浏览器请求
-            setHeader(null,httpPost, HttpHeader.build().setDfaultHeader());
-        }
+        // 如果没有设置header默认伪装浏览器请求
+        setHeader(null,httpPost, null != headers?headers:HttpHeader.build().setDfaultHeader());
 
         Map<String,Object> params = httpRequestConfig.getParams();
         final List<NameValuePair> parameters;
@@ -153,7 +148,7 @@ public class HttpClientExcutor {
             parameters = new ArrayList<>();
             paramsObject = new JSONObject();
             params.forEach((k,v) ->{
-                if (httpRequestConfig.isBody() && ){
+                if (httpRequestConfig.isForm()){
                     parameters.add(new BasicNameValuePair(k,String.valueOf(v)));
                 }else {
                     paramsObject.put(k,String.valueOf(v));
@@ -177,30 +172,22 @@ public class HttpClientExcutor {
         RequestConfig requestConfig = httpRequestConfig.getRequestConfig();
         httpPost.setConfig(null != requestConfig?requestConfig:this.requestConfig);
         // 请求的结果
-        HttpResponse httpResponse = execute(httpPost,null,classzz);
-        return httpResponse;
+        return execute(httpPost,null,classzz);
     }
 
-    private HttpResponse<? extends BaseHttpResponse> execute(HttpPost httpPost,HttpGet httpGet,
-                                                             Class<? extends HttpResponse> classzz) throws IOException {
+    private <T> HttpResponse<T> execute(HttpPost httpPost,HttpGet httpGet,
+                                                             Class<T> classzz) throws IOException {
         CloseableHttpResponse response = null;
-        HttpResponse httpResponse = null;
+        HttpResponse httpResponse = new HttpResponse();
         try {
             // 执行请求
-            if (null != httpPost){
-                response = httpClient.execute(httpPost);
-            }else{
-                response = httpClient.execute(httpGet);
-            }
-
+            response = null != httpPost?httpClient.execute(httpPost):httpClient.execute(httpGet);
             // 获取服务端返回的数据,并返回
-            System.out.println(JSONObject.toJSONString(response.getEntity()));
-            httpResponse = JSONObject.parseObject(EntityUtils.toString(response.getEntity(), UTF_8),classzz);
-            httpResponse.setStatusCode(response.getStatusLine().getStatusCode());
-            if (response.getStatusLine().getStatusCode() == 200){
-                httpResponse.successful();
-            }else {
-                httpResponse.setFailure();
+            T parseObject = JSONObject.parseObject(EntityUtils.toString(response.getEntity(), UTF_8),classzz);
+            httpResponse.setCode(HttpStatus.valueOf(response.getStatusLine().getStatusCode()));
+            httpResponse.setData(parseObject);
+            if (response.getStatusLine().getStatusCode() != 200){
+                httpResponse.failure();
             }
         } finally {
             if (response != null) {
