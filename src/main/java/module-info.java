@@ -15,7 +15,11 @@ module hx.http2client {
     requires spring.webmvc;
     requires org.apache.commons.codec;
     requires hamcrest.core;
-    requires core;
+    requires retrofit2;
+    requires retrofit2.converter.gson;
+    requires gson;
+    requires java.sql;
+//    requires core;
 //    requires javase;
 
     exports hx.http2.client.config;
@@ -26,4 +30,5 @@ module hx.http2client {
     exports hx.http2.client.exception;
     exports hx.http2.client.response;
     exports hx.http2.client.utils;
+    exports hx.http2.retrofit2;
 }

@@ -38,23 +38,27 @@ public class HttpRequestConfig implements Serializable {
         return new HttpRequestConfig();
     }
 
-    public HttpRequestConfig bodyStr(Map<String,String> paramMap){
-        checkMap(this.params);
-        this.params.putAll(paramMap);
-        return this;
-    }
+//    public HttpRequestConfig bodyStr(Map<String,String> paramMap){
+//        this.params = checkMap(this.params);
+//        this.params.putAll(paramMap);
+//        return this;
+//    }
 
     public HttpRequestConfig body(Map<String,Object> paramMap){
-        checkMap(this.params);
+        this.params = checkMap(this.params);
         this.params.putAll(paramMap);
         return this;
     }
 
     public HttpRequestConfig body(Object param){
-        checkMap(this.params);
+        this.params = checkMap(this.params);
         if (param instanceof JSONObject){
             this.params.putAll((JSONObject)param);
             return this;
+        }
+
+        if (param instanceof Map){
+            return body((Map<String, Object>) param);
         }
 
         try {
@@ -72,34 +76,38 @@ public class HttpRequestConfig implements Serializable {
         }catch (Exception e){
             LOGGER.error("param string is not json string, jsonParam:{}",jsonParam);
         }
-        checkMap(this.params);
+        this.params = checkMap(this.params);
         this.params.putAll(object);
         return this;
     }
 
     public HttpRequestConfig body(String key,Object value){
-        checkMap(this.params);
+        this.params = checkMap(this.params);
         this.params.put(key,value);
         return this;
     }
 
-    public HttpRequestConfig requestParamStr(Map<String,String> paramMap){
-        checkMap(this.requestParam);
-        this.requestParam.putAll(paramMap);
-        return this;
-    }
+//    public HttpRequestConfig requestParamStr(Map<String,String> paramMap){
+//        this.params = checkMap(this.requestParam);
+//        this.requestParam.putAll(paramMap);
+//        return this;
+//    }
 
     public HttpRequestConfig requestParam(Map<String,Object> paramMap){
-        checkMap(this.requestParam);
+        this.requestParam = checkMap(this.requestParam);
         this.requestParam.putAll(paramMap);
         return this;
     }
 
     public HttpRequestConfig requestParam(Object param){
-        checkMap(this.requestParam);
+        this.requestParam = checkMap(this.requestParam);
         if (param instanceof JSONObject){
             this.requestParam.putAll((JSONObject)param);
             return this;
+        }
+
+        if (param instanceof Map){
+            return requestParam((Map<String, Object>) param);
         }
 
         try {
@@ -117,13 +125,13 @@ public class HttpRequestConfig implements Serializable {
         }catch (Exception e){
             LOGGER.error("param string is not json string, jsonParam:{}",jsonParam);
         }
-        checkMap(this.requestParam);
+        this.requestParam = checkMap(this.requestParam);
         this.requestParam.putAll(object);
         return this;
     }
 
     public HttpRequestConfig requestParam(String key,String value){
-        checkMap(this.requestParam);
+        this.requestParam = checkMap(this.requestParam);
         this.requestParam.put(key,value);
         return this;
     }
@@ -191,17 +199,19 @@ public class HttpRequestConfig implements Serializable {
         return form;
     }
 
-    public void setForm(boolean form) {
+    public HttpRequestConfig setForm(boolean form) {
         this.form = form;
+        return this;
     }
 
     public Map<String, Object> getRequestParam() {
         return requestParam;
     }
 
-    private void checkMap(Map<String,Object> map){
+    private Map<String,Object> checkMap(Map<String,Object> map){
         if (null == map){
-            map = new HashMap<>();
+            return new HashMap<>();
         }
+        return map;
     }
 }

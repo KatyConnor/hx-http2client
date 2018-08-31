@@ -7,6 +7,8 @@ import hx.http2.client.enums.HttpStatus;
 import hx.http2.client.enums.RequestMethodEnum;
 import hx.http2.client.exception.HttpConnectException;
 import hx.http2.client.response.HttpResponse;
+import org.apache.http.Header;
+import org.apache.http.HttpRequest;
 import org.apache.http.NameValuePair;
 import org.apache.http.client.ClientProtocolException;
 import org.apache.http.client.config.RequestConfig;
@@ -15,6 +17,9 @@ import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.utils.URIBuilder;
+import org.apache.http.entity.AbstractHttpEntity;
+import org.apache.http.entity.EntityTemplate;
+import org.apache.http.entity.HttpEntityWrapper;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.message.BasicNameValuePair;
@@ -24,10 +29,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.Charset;
@@ -100,22 +102,14 @@ public class HttpClientExcutor {
         // 创建http GET请求
         HttpGet httpGet =new HttpGet(uri);
         // 设置请求参数
-        Map<String,String> headers = httpRequestConfig.getHeaders().getHeaders();
-        if (null != headers){
-            headers.forEach((k,v) ->{
-                httpGet.setHeader(k,v);
-            });
-        }else {
-            // 伪装浏览器请求
-            setHeader(httpGet,null,HttpHeader.build().setDfaultHeader());
-        }
+        HttpHeader header = httpRequestConfig.getHeaders();
+        // 伪装浏览器请求
+        setHeader(httpGet,null,null != header && null != header.getHeaders()?header.getHeaders():HttpHeader.build().setDfaultHeader());
         // 配置请求的超时设置
         RequestConfig requestConfig = httpRequestConfig.getRequestConfig();
         httpGet.setConfig(null != requestConfig?requestConfig:this.requestConfig);
         // 请求的结果
-        HttpResponse httpResponse = execute(null,httpGet,classzz);
-        LOGGER.info("request service end, response:{}",JSONObject.toJSONString(httpResponse));
-        return httpResponse;
+        return execute(null,httpGet,classzz);
     }
 
     /**
@@ -127,46 +121,25 @@ public class HttpClientExcutor {
      * @throws ClientProtocolException
      * @throws IOException
      */
-    private HttpResponse doPost(HttpRequestConfig httpRequestConfig,
-                                                           Class<? extends HttpResponse> classzz) throws URISyntaxException,
+    private <T> HttpResponse<T> doPost(HttpRequestConfig httpRequestConfig,
+                                                           Class<T> classzz) throws URISyntaxException,
             ClientProtocolException, IOException {
         LOGGER.info("do post request, requestConfig:{}",JSONObject.toJSONString(httpRequestConfig));
         // 创建http POST请求
         String url = getUrl(httpRequestConfig.getHostAddress(),httpRequestConfig.getUrl());
+        Map<String,Object> requestParam = httpRequestConfig.getRequestParam();
+        if (null != requestParam){
+            url = setPostRequestParam(url,requestParam);
+        }
         HttpPost httpPost = new HttpPost(url);
 
         // 设置请求头参数
-        Map<String,String> headers = httpRequestConfig.getHeaders().getHeaders();
+        HttpHeader header = httpRequestConfig.getHeaders();
         // 如果没有设置header默认伪装浏览器请求
-        setHeader(null,httpPost, null != headers?headers:HttpHeader.build().setDfaultHeader());
+        setHeader(null,httpPost, null != header && null != header.getHeaders()?header.getHeaders():HttpHeader.build().setDfaultHeader());
 
         Map<String,Object> params = httpRequestConfig.getParams();
-        final List<NameValuePair> parameters;
-        final JSONObject paramsObject;
-        if (params != null) {
-            // 设置post参数
-            parameters = new ArrayList<>();
-            paramsObject = new JSONObject();
-            params.forEach((k,v) ->{
-                if (httpRequestConfig.isForm()){
-                    parameters.add(new BasicNameValuePair(k,String.valueOf(v)));
-                }else {
-                    paramsObject.put(k,String.valueOf(v));
-                }
-            });
-
-            // 构造一个form表单式的实体
-            if (null != parameters){
-                UrlEncodedFormEntity formEntity = new UrlEncodedFormEntity(parameters);
-                httpPost.setEntity(formEntity);
-            }
-            if (null != paramsObject){
-                // 构建一个json，body数据传递
-                StringEntity stringEntity = new StringEntity(paramsObject.toJSONString(), Charset.forName("UTF-8"));
-                httpPost.setEntity(stringEntity);
-            }
-
-        }
+        setParam(params,httpPost,httpRequestConfig.isForm());
 
         // 配置请求的超时设置
         RequestConfig requestConfig = httpRequestConfig.getRequestConfig();
@@ -175,6 +148,15 @@ public class HttpClientExcutor {
         return execute(httpPost,null,classzz);
     }
 
+    /**
+     * 请求执行
+     * @param httpPost
+     * @param httpGet
+     * @param classzz
+     * @param <T>
+     * @return
+     * @throws IOException
+     */
     private <T> HttpResponse<T> execute(HttpPost httpPost,HttpGet httpGet,
                                                              Class<T> classzz) throws IOException {
         CloseableHttpResponse response = null;
@@ -183,9 +165,15 @@ public class HttpClientExcutor {
             // 执行请求
             response = null != httpPost?httpClient.execute(httpPost):httpClient.execute(httpGet);
             // 获取服务端返回的数据,并返回
-            T parseObject = JSONObject.parseObject(EntityUtils.toString(response.getEntity(), UTF_8),classzz);
+            T parseObject = null;
+            String resultStr =EntityUtils.toString(response.getEntity(), UTF_8);
+            try{
+                parseObject = JSONObject.parseObject(resultStr,classzz);
+                httpResponse.setData(parseObject);
+            }catch (Exception e){
+                httpResponse.setData(resultStr);
+            }
             httpResponse.setCode(HttpStatus.valueOf(response.getStatusLine().getStatusCode()));
-            httpResponse.setData(parseObject);
             if (response.getStatusLine().getStatusCode() != 200){
                 httpResponse.failure();
             }
@@ -194,6 +182,7 @@ public class HttpClientExcutor {
                 response.close();
             }
         }
+        LOGGER.info("request service end, response ：{}",JSONObject.toJSONStringWithDateFormat(httpResponse,"yyyy-MM-dd HH:mm:ss"));
         return httpResponse;
     }
 
@@ -214,6 +203,15 @@ public class HttpClientExcutor {
     }
 
     private URI setGetUrl(String url, Map<String, Object> params) throws URISyntaxException {
+        return setUrl(url,params);
+    }
+
+    private String setPostRequestParam(String url, Map<String, Object> params) throws URISyntaxException{
+        URI uri = setUrl(url,params);
+        return uri.toString();
+    }
+
+    private URI setUrl(String url, Map<String, Object> params) throws URISyntaxException {
         URIBuilder builder = new URIBuilder(url);
         if (params != null) {
             params.forEach((k,v) ->{
@@ -256,6 +254,32 @@ public class HttpClientExcutor {
             }
         }
         return sb.toString();
+    }
+
+    private void setParam(Map<String,Object> params,HttpPost httpPost,boolean isform) throws UnsupportedEncodingException {
+        if (params != null) {
+            // 设置post参数
+            final List<NameValuePair> parameters = new ArrayList<>();
+            final JSONObject paramsObject = new JSONObject();
+            params.forEach((k,v) ->{
+                if (isform){
+                    parameters.add(new BasicNameValuePair(k,String.valueOf(v)));
+                }else {
+                    paramsObject.put(k,String.valueOf(v));
+                }
+            });
+
+            // 构造一个form表单式的实体
+            if (parameters.size() >0){
+                UrlEncodedFormEntity formEntity = new UrlEncodedFormEntity(parameters);
+                httpPost.setEntity(formEntity);
+            }
+            if (paramsObject.size() >0){
+                // 构建一个json，body数据传递
+                StringEntity stringEntity = new StringEntity(paramsObject.toJSONString(), Charset.forName("UTF-8"));
+                httpPost.setEntity(stringEntity);
+            }
+        }
     }
 
 }

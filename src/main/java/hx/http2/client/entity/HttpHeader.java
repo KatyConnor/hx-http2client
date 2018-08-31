@@ -1,12 +1,21 @@
 package hx.http2.client.entity;
 
+import org.apache.http.Header;
+
+import java.util.HashMap;
 import java.util.Map;
 
 public class HttpHeader {
 
-    private Map<String,String> headers;
+    private static Map<String,String> headers;
 
-    private HttpHeader(){};
+    private Header header;
+
+    private Header[] headeres;
+
+    private HttpHeader(){
+        headers = new HashMap<>();
+    };
 
     public static HttpHeader build(){
         return new HttpHeader();
@@ -69,5 +78,23 @@ public class HttpHeader {
 
     public void setHeaders(Map<String, String> headers) {
         this.headers = headers;
+    }
+
+    public Header getHeader() {
+        return header;
+    }
+
+    public HttpHeader setHeader(Header header) {
+        this.header = header;
+        return this;
+    }
+
+    public Header[] getHeaderes() {
+        return headeres;
+    }
+
+    public HttpHeader setHeaderes(Header[] headeres) {
+        this.headeres = headeres;
+        return this;
     }
 }
