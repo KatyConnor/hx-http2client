@@ -15,6 +15,7 @@
  */
 package hx.http2.retrofit2;
 
+import hx.http2.gson.GsonBeanFactory;
 import hx.http2.retrofit2.annotation.RetrofitClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,7 +51,7 @@ public class RetrofitClientFactoryBean<T> implements FactoryBean<T>, Environment
         LOGGER.info("interface class is :{} ",retrofitInterface);
 
         Retrofit retrofit = new Retrofit.Builder()
-                .addConverterFactory(GsonConverterFactory.create()) // @TODO gson扩展
+                .addConverterFactory(GsonConverterFactory.create(GsonBeanFactory.newInstance().setIsLong(false).builder())) // gson扩展
                 .baseUrl(url)
                 .build();
         return retrofit.create(retrofitInterface);
