@@ -5,7 +5,11 @@ import hx.http2.client.entity.ContentType;
 import hx.http2.client.entity.HttpHeader;
 import hx.http2.client.enums.RequestMethodEnum;
 import hx.http2.client.utils.BeanMapUtil;
+import org.apache.http.client.CookieStore;
 import org.apache.http.client.config.RequestConfig;
+import org.apache.http.client.protocol.HttpClientContext;
+import org.apache.http.protocol.BasicHttpContext;
+import org.apache.http.protocol.HttpContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -14,7 +18,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- *
+ * HttP请求配置类
  * @Author mingliang
  * @Date 2018-08-06 17:43
  */
@@ -31,18 +35,14 @@ public class HttpRequestConfig implements Serializable {
     private RequestConfig requestConfig;
     private boolean form;
     private ContentType contentType;
+    private Map<String,String> pathVariable;
+    private boolean cookieStore;
 
     private HttpRequestConfig(){}
 
     public static HttpRequestConfig build(){
         return new HttpRequestConfig();
     }
-
-//    public HttpRequestConfig bodyStr(Map<String,String> paramMap){
-//        this.params = checkMap(this.params);
-//        this.params.putAll(paramMap);
-//        return this;
-//    }
 
     public HttpRequestConfig body(Map<String,Object> paramMap){
         this.params = checkMap(this.params);
@@ -86,12 +86,6 @@ public class HttpRequestConfig implements Serializable {
         this.params.put(key,value);
         return this;
     }
-
-//    public HttpRequestConfig requestParamStr(Map<String,String> paramMap){
-//        this.params = checkMap(this.requestParam);
-//        this.requestParam.putAll(paramMap);
-//        return this;
-//    }
 
     public HttpRequestConfig requestParam(Map<String,Object> paramMap){
         this.requestParam = checkMap(this.requestParam);
@@ -213,5 +207,43 @@ public class HttpRequestConfig implements Serializable {
             return new HashMap<>();
         }
         return map;
+    }
+
+    public HttpRequestConfig pathVariable(Map<String, String> pathVariable) {
+        this.pathVariable = pathVariable;
+        return this;
+    }
+
+    public HttpRequestConfig pathVariable(Object pathVariable) {
+        this.pathVariable = null == this.pathVariable?new HashMap<>() : this.pathVariable;
+        if (pathVariable instanceof JSONObject){
+            this.params.putAll((JSONObject)pathVariable);
+            return this;
+        }
+
+        if (pathVariable instanceof Map){
+             this.pathVariable.putAll((Map<String, String>)pathVariable);
+             return this;
+        }
+
+        try {
+            this.params.putAll(BeanMapUtil.beanToMap(pathVariable));
+        } catch (IllegalAccessException e) {
+            LOGGER.error("cast bean to map,exception:{}",e);
+        }
+        return this;
+    }
+
+    public Map<String, String> getPathVariable() {
+        return pathVariable;
+    }
+
+    public boolean getCookieStore() {
+        return cookieStore;
+    }
+
+    public HttpRequestConfig setCookieStore(boolean cookieStore) {
+        this.cookieStore = cookieStore;
+        return this;
     }
 }
