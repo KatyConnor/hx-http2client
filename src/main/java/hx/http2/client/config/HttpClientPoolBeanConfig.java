@@ -3,9 +3,11 @@ package hx.http2.client.config;
 import hx.http2.client.handler.HXHttpRequestRetryHandler;
 import org.apache.http.*;
 import org.apache.http.auth.AuthScope;
+import org.apache.http.client.CookieStore;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.config.CookieSpecs;
 import org.apache.http.client.config.RequestConfig;
+import org.apache.http.client.protocol.HttpClientContext;
 import org.apache.http.config.Registry;
 import org.apache.http.config.RegistryBuilder;
 import org.apache.http.config.SocketConfig;
@@ -16,11 +18,13 @@ import org.apache.http.conn.routing.HttpRoute;
 import org.apache.http.conn.socket.ConnectionSocketFactory;
 import org.apache.http.conn.socket.LayeredConnectionSocketFactory;
 import org.apache.http.conn.socket.PlainConnectionSocketFactory;
+import org.apache.http.conn.ssl.NoopHostnameVerifier;
 import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
-import org.apache.http.conn.ssl.SSLContexts;
 import org.apache.http.conn.ssl.TrustSelfSignedStrategy;
+import org.apache.http.cookie.CookieSpecProvider;
 import org.apache.http.impl.client.*;
 import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
+import org.apache.http.impl.cookie.*;
 import org.apache.http.message.BasicHeaderElementIterator;
 import org.apache.http.params.BasicHttpParams;
 import org.apache.http.params.CoreConnectionPNames;
@@ -28,6 +32,7 @@ import org.apache.http.params.HttpParams;
 import org.apache.http.protocol.HTTP;
 import org.apache.http.protocol.HttpContext;
 import org.apache.http.ssl.SSLContextBuilder;
+import org.apache.http.ssl.SSLContexts;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -142,6 +147,9 @@ public class HttpClientPoolBeanConfig {
     @Value("${http.maxIdleTime}")
     private long maxIdleTime;
 
+    @Value("${http.cookie}")
+    private boolean cookie;
+
     // 异常情况
     static {
         nonRetriableClasses.add(NoHttpResponseException.class);  // 如果服务器丢掉了连接
@@ -164,7 +172,7 @@ public class HttpClientPoolBeanConfig {
 
         try {
             sslContext.loadTrustMaterial(new File(classPath.getPath()), keystorePassword.toCharArray(), new TrustSelfSignedStrategy());
-           // 设置参数请求信任，不做效验
+           // 设置参数请求信任，不做效验  Allow TLSv1 protocol only
             LayeredConnectionSocketFactory sslsf = new SSLConnectionSocketFactory(sslContext.build(),new String[]{"SSLv2Hello", "SSLv3", "TLSv1", "TLSv1.2"}, null,
                     SSLConnectionSocketFactory.getDefaultHostnameVerifier());
 
@@ -221,24 +229,18 @@ public class HttpClientPoolBeanConfig {
 
     @Bean(name = "connectionKeepAliveStrategy")
     public ConnectionKeepAliveStrategy keepAliveStrategy(){
-        ConnectionKeepAliveStrategy myStrategy = new ConnectionKeepAliveStrategy() {
-            @Override
-            public long getKeepAliveDuration(HttpResponse response, HttpContext context) {
-                HeaderElementIterator it = new BasicHeaderElementIterator
-                        (response.headerIterator(HTTP.CONN_KEEP_ALIVE));
-                while (it.hasNext()) {
-                    HeaderElement he = it.nextElement();
-                    String param = he.getName();
-                    String value = he.getValue();
-                    if (value != null && param.equalsIgnoreCase
-                            ("timeout")) {
-                        return Long.parseLong(value) * 1000;
-                    }
+        return (response,context)->{
+            HeaderElementIterator it = new BasicHeaderElementIterator(response.headerIterator(HTTP.CONN_KEEP_ALIVE));
+            while (it.hasNext()) {
+                HeaderElement he = it.nextElement();
+                String param = he.getName();
+                String value = he.getValue();
+                if (value != null && param.equalsIgnoreCase("timeout")) {
+                    return Long.parseLong(value) * 1000;
                 }
-                return 60 * 1000;//如果没有约定，则默认定义时长为60s
             }
+            return 60 * 1000;//如果没有约定，则默认定义时长为60s
         };
-        return myStrategy;
     }
 
     /**
@@ -246,8 +248,8 @@ public class HttpClientPoolBeanConfig {
      * @return
      */
     @Bean(name = "httpClient")
-    public CloseableHttpClient httpClient(@Qualifier("httpClientBuilder") HttpClientBuilder httpClientBuilder) {
-        return httpClientBuilder.build();
+    public CloseableHttpClient httpClient(@Qualifier("cookieStore") CookieStore cookieStore, @Qualifier("httpClientBuilder") HttpClientBuilder httpClientBuilder) {
+        return httpClientBuilder.setDefaultCookieStore(cookieStore).build();
     }
 
     /**
@@ -275,7 +277,7 @@ public class HttpClientPoolBeanConfig {
      */
     @Bean(name = "requestConfig")
     public RequestConfig initRequestConfig(){
-        RequestConfig requestConfig = RequestConfig.custom().setCookieSpec(CookieSpecs.IGNORE_COOKIES).setConnectTimeout(connectTimeout).
+        RequestConfig requestConfig = RequestConfig.custom().setCookieSpec(cookie == true?CookieSpecs.DEFAULT:CookieSpecs.IGNORE_COOKIES).setConnectTimeout(connectTimeout).
                 setConnectionRequestTimeout(connectionRequestTimeout).setSocketTimeout(socketTimeout).
                 setStaleConnectionCheckEnabled(staleConnectionCheckEnabled).build();
         return requestConfig;
@@ -295,6 +297,26 @@ public class HttpClientPoolBeanConfig {
                 .setSoKeepAlive(true)    //开启监视TCP连接是否有效
                 .build();
         return socketConfig;
+    }
+
+    @Bean(name = "cookieStore")
+    public CookieStore initCookieStore(){
+        BasicCookieStore cookieStore = new BasicCookieStore();
+        BasicClientCookie2 cookie = new BasicClientCookie2("SESSION","");
+        cookie.setVersion(0);
+        cookieStore.addCookie(cookie);
+        return cookieStore;
+    }
+
+    @Bean(name = "httpClientContext")
+    public HttpClientContext initHttpClientContext(@Qualifier("cookieStore") CookieStore cookieStore){
+        HttpClientContext httpContext = HttpClientContext.create();
+        Registry<CookieSpecProvider> registry = RegistryBuilder.<CookieSpecProvider> create()
+                .register(CookieSpecs.DEFAULT, new DefaultCookieSpecProvider())
+                .register(CookieSpecs.BROWSER_COMPATIBILITY, new BrowserCompatSpecFactory()).build();
+        httpContext.setCookieSpecRegistry(registry);
+        httpContext.setCookieStore(cookieStore);
+        return httpContext;
     }
 
     /**
